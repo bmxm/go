@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"testing"
 )
 
 func ExampleHijacker() {
@@ -193,3 +194,40 @@ func ExampleNotFoundHandler() {
 
 	log.Fatal(http.ListenAndServe(":8080", mux))
 }
+
+// 当我们直接调用 http.HandleFunc 注册处理器时，标准库会使用默认的 HTTP 服务器
+// http.DefaultServeMux 处理请求，该方法会直接调用 http.ServeMux.HandleFunc
+// 上述方法会将处理器转换成 http.Handler 接口类型调用 http.ServeMux.Handle 注册处理器：
+func TestListenAndServe(t *testing.T) {
+	// 注册路由到 DefaultServeMux
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("Hello World"))
+	})
+
+	// 创建服务 -> 监听请求 -> 创建连接 -> 处理请求
+	if err := http.ListenAndServe(":9000", nil); err != nil {
+		t.Error(err)
+	}
+
+	// 第一层，标准库创建 HTTP 服务是通过创建一个 Server 数据结构完成的；
+	// 第二层，Server 数据结构在 for 循环中不断监听每一个连接；
+	// 第三层，每个连接默认开启一个 Goroutine 为其服务；
+	// 第四、五层，serverHandler 结构代表请求对应的处理逻辑，并且通过这个结构进行具体业务逻辑处理；
+	// 第六层，Server 数据结构如果没有设置处理函数 Handler，默认使用 DefaultServerMux 处理请求；
+	// 第七层，DefaultServerMux 是使用 map 结构来存储和查找路由规则。
+}
+
+// 快速掌握代码库：库函数 -> 结构定义 -> 结构函数
+// 通过 go doc net/http | grep "^func" 命令行能查询出 net/http 库所有的对外库函数
+// 通过 go doc net/http | grep "^type"|grep struct 命令行能查询出 net/http 库所有的 struct
+
+// Client 负责构建 HTTP 客户端
+// Server 负责构建 HTTP 服务端
+// ServerMux 负责 HTTP 服务端路由
+// Transport、Request、Response、Cookie 负责客户端和服务端传输对应的不同模块。
+
+// 通过库方法（function）和结构体（struct），对整个库的结构和功能可以有大概了解。
+// 整个库承担了两部分功能，一部分是构建 HTTP 客户端，一部分是构建 HTTP 服务端。
+//
+// 构建的 HTTP 服务端除了提供真实服务之外，也能提供代理中转服务，它们分别由 Client 和 Server 两个数据结构负责。
+// 除了这两个最重要的数据结构之外，HTTP 协议的每个部分，比如请求、返回、传输设置等都有具体的数据结构负责。

@@ -111,9 +111,11 @@ var DefaultClient = &Client{}
 
 // RoundTripper is an interface representing the ability to execute a
 // single HTTP transaction, obtaining the Response for a given Request.
+// 执行单个HTTP事务，获取给定请求的响应。
 //
 // A RoundTripper must be safe for concurrent use by multiple
 // goroutines.
+// 必须保证线程安全
 type RoundTripper interface {
 	// RoundTrip executes a single HTTP transaction, returning
 	// a Response for the provided Request.

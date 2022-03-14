@@ -60,6 +60,7 @@ var (
 )
 
 // A Handler responds to an HTTP request.
+// 响应HTTP请求
 //
 // ServeHTTP should write reply headers and data to the ResponseWriter
 // and then return. Returning signals that the request is finished; it
@@ -83,6 +84,11 @@ var (
 // RST_STREAM, depending on the HTTP protocol. To abort a handler so
 // the client sees an interrupted response but the server doesn't log
 // an error, panic with the value ErrAbortHandler.
+//
+// HTTP 请求的接收方可以实现 http.Handler 接口，其中实现了处理 HTTP 请求的逻辑，
+// 处理的过程中会调用 http.ResponseWriter 接口的方法构造 HTTP 响应，它提供的
+// 三个接口 Header、Write 和 WriteHeader 分别会获取 HTTP 响应、将数据写入负载
+// 以及写入响应头
 type Handler interface {
 	ServeHTTP(ResponseWriter, *Request)
 }
@@ -1792,6 +1798,7 @@ func isCommonNetReadError(err error) bool {
 }
 
 // Serve a new connection.
+// 就是单个连接的服务逻辑
 func (c *conn) serve(ctx context.Context) {
 	c.remoteAddr = c.rwc.RemoteAddr().String()
 	ctx = context.WithValue(ctx, LocalAddrContextKey, c.rwc.LocalAddr())
@@ -1808,6 +1815,8 @@ func (c *conn) serve(ctx context.Context) {
 		}
 	}()
 
+	// serve函数先判断本次 HTTP 请求是否需要升级为 HTTPS，接着创建读文本的 reader 和写文本的 buffer，
+	// 再进一步读取本次请求数据
 	if tlsConn, ok := c.rwc.(*tls.Conn); ok {
 		if d := c.server.ReadTimeout; d > 0 {
 			c.rwc.SetReadDeadline(time.Now().Add(d))
@@ -1927,6 +1936,8 @@ func (c *conn) serve(ctx context.Context) {
 		// in parallel even if their responses need to be serialized.
 		// But we're not going to implement HTTP pipelining because it
 		// was never deployed in the wild and the answer is HTTP/2.
+		//
+		// 这个关键方法是为了实现自定义的路由和业务逻辑，调用写法是比较有意思的
 		serverHandler{c.server}.ServeHTTP(w, w.req)
 		w.cancelCtx()
 		if c.hijacked() {
@@ -2427,6 +2438,11 @@ func (mux *ServeMux) ServeHTTP(w ResponseWriter, r *Request) {
 
 // Handle registers the handler for the given pattern.
 // If a handler already exists for pattern, Handle panics.
+//
+// DefaultServeMux.Handle 是一个非常简单的 map 实现，key 是
+// 路径（pattern），value 是这个 pattern 对应的处理函数（handler）。
+// 它是通过 mux.match(path) 寻找对应 Handler，也就是从
+// DefaultServeMux 内部的 map 中直接根据 key 寻找到 value 的。
 func (mux *ServeMux) Handle(pattern string, handler Handler) {
 	mux.mu.Lock()
 	defer mux.mu.Unlock()
@@ -2501,6 +2517,7 @@ func HandleFunc(pattern string, handler func(ResponseWriter, *Request)) {
 // Config.NextProtos.
 //
 // Serve always returns a non-nil error.
+// 通过net.Listener结构和控制器函数来创建HTTP服务
 func Serve(l net.Listener, handler Handler) error {
 	srv := &Server{Handler: handler}
 	return srv.Serve(l)
@@ -2518,6 +2535,7 @@ func Serve(l net.Listener, handler Handler) error {
 // of the server's certificate, any intermediates, and the CA's certificate.
 //
 // ServeTLS always returns a non-nil error.
+// 通过net.Listener结构和控制器函数来创建HTTPS服务
 func ServeTLS(l net.Listener, handler Handler, certFile, keyFile string) error {
 	srv := &Server{Handler: handler}
 	return srv.ServeTLS(l, certFile, keyFile)
@@ -2851,11 +2869,20 @@ func (c ConnState) String() string {
 
 // serverHandler delegates to either the server's Handler or
 // DefaultServeMux and also handles "OPTIONS *" requests.
+//
+// serverHandler 结构体，是标准库封装的，代表“请求对应的处理逻辑”，
+// 它只包含了一个指向总入口服务 server 的指针。
+// 这个结构将总入口的服务结构 Server 和每个连接的处理逻辑巧妙联系在一起了
+//
+// 这里的 serverHandler 设计，能同时保证这个库的扩展性和易用性：你可以很
+// 方便使用默认方法处理请求，但是一旦有需求，也能自己扩展出方法处理请求。
 type serverHandler struct {
 	srv *Server
 }
 
 func (sh serverHandler) ServeHTTP(rw ResponseWriter, req *Request) {
+	// 如果入口服务 server 结构已经设置了 Handler，就调用这个 Handler 来处理此次请求，
+	// 反之则使用库自带的 DefaultServerMux。
 	handler := sh.srv.Handler
 	if handler == nil {
 		handler = DefaultServeMux
@@ -2924,10 +2951,13 @@ func (srv *Server) ListenAndServe() error {
 	if addr == "" {
 		addr = ":http"
 	}
+
+	// 先定义监听信息 net.Listen
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		return err
 	}
+	// 然后调用 Serve 函数。
 	return srv.Serve(ln)
 }
 
@@ -2998,6 +3028,9 @@ func (srv *Server) Serve(l net.Listener) error {
 	var tempDelay time.Duration // how long to sleep on accept failure
 
 	ctx := context.WithValue(baseCtx, ServerContextKey, srv)
+	// 用一个 for 循环，通过 l.Accept 不断接收从客户端传进来的请求连接。
+	// 当接收到了一个新的请求连接的时候，通过 srv.NewConn创建了一个连接结构（http.conn），
+	// 并创建一个 Goroutine 为这个请求连接对应服务（c.serve）。
 	for {
 		rw, err := l.Accept()
 		if err != nil {
@@ -3176,10 +3209,15 @@ func logf(r *Request, format string, args ...interface{}) {
 // ListenAndServe listens on the TCP network address addr and then calls
 // Serve with handler to handle requests on incoming connections.
 // Accepted connections are configured to enable TCP keep-alives.
+// 通过监听的URL地址和控制器函数来创建HTTP服务
 //
 // The handler is typically nil, in which case the DefaultServeMux is used.
 //
 // ListenAndServe always returns a non-nil error.
+//
+// ListenAndServe 本质是通过创建一个 Server 数据结构，调用 server.ListenAndServe
+// 对外提供服务，这一层完全是比较简单的封装，目的是，将 Server 结构创建服务的方法
+// ListenAndServe, 直接作为库函数对外提供，增加库的易用性。
 func ListenAndServe(addr string, handler Handler) error {
 	server := &Server{Addr: addr, Handler: handler}
 	return server.ListenAndServe()
@@ -3190,6 +3228,7 @@ func ListenAndServe(addr string, handler Handler) error {
 // matching private key for the server must be provided. If the certificate
 // is signed by a certificate authority, the certFile should be the concatenation
 // of the server's certificate, any intermediates, and the CA's certificate.
+// 通过监听的URL地址和控制器函数来创建HTTPS服务
 func ListenAndServeTLS(addr, certFile, keyFile string, handler Handler) error {
 	server := &Server{Addr: addr, Handler: handler}
 	return server.ListenAndServeTLS(certFile, keyFile)

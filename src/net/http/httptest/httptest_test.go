@@ -15,7 +15,7 @@ import (
 )
 
 func TestNewRequest(t *testing.T) {
-	for _, tt := range [...]struct {
+	for _, tt := range [...]struct { // 初始化了一个匿名结构体数组
 		name string
 
 		method, uri string
