@@ -214,3 +214,11 @@ rm -f ./cmd/dist/dist
 # If something must be added, add it to cmd/dist's cmdbootstrap,
 # to avoid needing three copies in three different shell languages
 # (make.bash, make.bat, make.rc).
+
+
+# 本地调试源码
+# 1 从github拉取源码到 $GOROOT/src 目录下
+# 2 修改源代码
+# 3 执行编译脚本
+# 之后便可以使用自己编译的SDK运行go代码, 如： ~/go/src/go/bin/go run main.go
+# 另外，也可以将 ~/go/src/go 配置成GoLand的SDK, 并且可以运行~/go/src/go项目本身
