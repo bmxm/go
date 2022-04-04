@@ -18,6 +18,7 @@ import (
 	"golang.org/x/mod/semver"
 )
 
+// 需要研究一下
 var cmdTidy = &base.Command{
 	UsageLine: "go mod tidy [-e] [-v] [-go=version] [-compat=version]",
 	Short:     "add missing and remove unused modules",

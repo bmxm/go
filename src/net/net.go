@@ -379,8 +379,10 @@ func listenerBacklog() int {
 }
 
 // A Listener is a generic network listener for stream-oriented protocols.
+// 一个 generic network listener 面向 stream-oriented 协议
 //
 // Multiple goroutines may invoke methods on a Listener simultaneously.
+// 多个 goroutines 可以 simultaneously（同时）invoke methods
 type Listener interface {
 	// Accept waits for and returns the next connection to the listener.
 	Accept() (Conn, error)
@@ -432,6 +434,7 @@ func mapErr(err error) error {
 // OpError is the error type usually returned by functions in the net
 // package. It describes the operation, network type, and address of
 // an error.
+// error 的 operation、network type、address。
 type OpError struct {
 	// Op is the operation which caused the error, such as
 	// "read" or "write".

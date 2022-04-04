@@ -15,12 +15,16 @@ import (
 
 // errNetClosing is the type of the variable ErrNetClosing.
 // This is used to implement the net.Error interface.
+// 之前的写法：
+// var ErrNetClosing = errors.New("use of closed network connection")
+// 现在的写法实现了 net.Error 接口
 type errNetClosing struct{}
 
 // Error returns the error message for ErrNetClosing.
 // Keep this string consistent because of issue #4373:
 // since historically programs have not been able to detect
 // this error, they look for the string.
+// 由于历史原因 #4373，人们只能通过字符串 检测当前 error。
 func (e errNetClosing) Error() string { return "use of closed network connection" }
 
 func (e errNetClosing) Timeout() bool   { return false }
