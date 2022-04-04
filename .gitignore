@@ -49,4 +49,6 @@ _testmain.go
 # This file includes artifacts of Go build that should not be checked in.
 # For files created by specific development environment (e.g. editor),
 # use alternative ways to exclude files from git.
+
+.idea
 # For example, set up .git/info/exclude or use a global .gitignore.
