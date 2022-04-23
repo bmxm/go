@@ -29,7 +29,7 @@ func assert(p bool) {
 
 // For outputting debug information on dictionary format and instantiated dictionaries
 // (type arg, derived types, sub-dictionary, and itab entries).
-var infoPrintMode = false
+var infoPrintMode = true
 
 func infoPrint(format string, a ...interface{}) {
 	if infoPrintMode {
