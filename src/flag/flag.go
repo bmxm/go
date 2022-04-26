@@ -778,6 +778,8 @@ func (f *FlagSet) String(name string, value string, usage string) *string {
 
 // String defines a string flag with specified name, default value, and usage string.
 // The return value is the address of a string variable that stores the value of the flag.
+// name 指定的名称 value 默认值
+// 返回值是存储flag的字符串变量的地址
 func String(name string, value string, usage string) *string {
 	return CommandLine.String(name, value, usage)
 }
