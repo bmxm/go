@@ -69,6 +69,7 @@ const (
 	// and iOS because they do not use a separate stack.
 	_StackSystem = sys.GoosWindows*512*sys.PtrSize + sys.GoosPlan9*512 + sys.GoosIos*sys.GoarchArm64*1024
 
+	// 每个goroutine都维护着一个自己的栈区，这个栈区只能自己使用不能被其他goroutine使用。
 	// The minimum size of stack used by Go code
 	_StackMin = 2048
 

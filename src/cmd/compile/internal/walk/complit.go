@@ -415,6 +415,7 @@ func slicelit(ctxt initContext, n *ir.CompLitExpr, var_ ir.Node, init *ir.Nodes)
 	init.Append(a)
 }
 
+// maplit 使用字面量初始化 map 的方式最终都会通过此函数进行初始化
 func maplit(n *ir.CompLitExpr, m ir.Node, init *ir.Nodes) {
 	// make the map var
 	a := ir.NewCallExpr(base.Pos, ir.OMAKE, nil, nil)

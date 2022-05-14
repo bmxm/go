@@ -111,19 +111,36 @@ func isEmpty(x uint8) bool {
 	return x <= emptyOne
 }
 
+// 随着哈希表存储的数据逐渐增多，我们会对哈希表扩容或者使用额外的桶存储溢出的数据，不会让每个桶的数量超过8个。
+// 不过溢出桶只是临时解决方案，创建过多溢出桶最终也会导致哈希表扩容。
+
+// Go 语言运行时会同时使用多个数据结构组合表示哈希表，其中 runtime.hmap 是最核心的数据结构体。
 // A header for a Go map.
 type hmap struct {
 	// Note: the format of the hmap is also encoded in cmd/compile/internal/reflectdata/reflect.go.
 	// Make sure this stays in sync with the compiler's definition.
-	count     int // # live cells == size of map.  Must be first (used by len() builtin)
-	flags     uint8
-	B         uint8  // log_2 of # of buckets (can hold up to loadFactor * 2^B items)
-	noverflow uint16 // approximate number of overflow buckets; see incrnoverflow for details
-	hash0     uint32 // hash seed
 
-	buckets    unsafe.Pointer // array of 2^B Buckets. may be nil if count==0.
+	// 当前哈希表中的元素数量
+	count int // # live cells == size of map.  Must be first (used by len() builtin)
+
+	flags uint8
+
+	// 当前哈希表持有的 buckets 数量，当时因为哈希表中桶的数量都是2的倍速，所有该字段会存储对数，
+	// 即： len(buckets) == 2^B
+	B uint8 // log_2 of # of buckets (can hold up to loadFactor * 2^B items)
+
+	noverflow uint16 // approximate number of overflow buckets; see incrnoverflow for details
+
+	// 哈希表的种子，它能为哈希函数的结果引入随机性，这个值在创建哈希表时确定，
+	// 并在调用哈希函数时作为参数传入。
+	hash0 uint32 // hash seed
+
+	buckets unsafe.Pointer // array of 2^B Buckets. may be nil if count==0.
+
+	// 哈希表在扩容时用于保存之前的 buckets 的字段，它的大小是当前 buckets 的一半。
 	oldbuckets unsafe.Pointer // previous bucket array of half the size, non-nil only when growing
-	nevacuate  uintptr        // progress counter for evacuation (buckets less than this have been evacuated)
+
+	nevacuate uintptr // progress counter for evacuation (buckets less than this have been evacuated)
 
 	extra *mapextra // optional fields
 }
@@ -146,7 +163,10 @@ type mapextra struct {
 }
 
 // A bucket for a Go map.
+// 桶
 type bmap struct {
+	// tophash 存储了键的哈希的高八位，通过比较不同键的哈希的高八位
+	// 可以减少访问键值对次数，以提高性能。
 	// tophash generally contains the top byte of the hash value
 	// for each key in this bucket. If tophash[0] < minTopHash,
 	// tophash[0] is a bucket evacuation state instead.
@@ -156,6 +176,18 @@ type bmap struct {
 	// code a bit more complicated than alternating key/elem/key/elem/... but it allows
 	// us to eliminate padding which would be needed for, e.g., map[int64]int8.
 	// Followed by an overflow pointer.
+
+	// 在运行期间, bmap 结构体其实不止包含tophash字段，因为哈希表中可能存储不同类型的键值对，
+	// 而且 Go 语言不支持泛型，所以键值对占据的内存空间大小只能在编译时进行推导。
+	// bmap 中的其他字段在运行时是通过计算内存地址的方式访问的，所以它的定义中不包含这些字段，
+	// 不过，我们能够根据编译期间的 cmd/compile/internal/gc.bmp 函数重建它的结构：
+	// type bmap struct {
+	//	 topbits  [8]uint8
+	//	 keys     [8]keytype
+	//	 values   [8]valuetype
+	//	 pad      uintptr
+	//	 overflow uintptr
+	// }
 }
 
 // A hash iteration structure.
