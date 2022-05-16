@@ -36,6 +36,8 @@ import (
 // To compare two Values, compare the results of the Interface method.
 // Using == on two Values does not compare the underlying values
 // they represent.
+//
+// Value 是结构体类型，它没有对外公开的字段，只能通过一系列方法来访问。
 type Value struct {
 	// typ holds the type of the value represented by a Value.
 	typ *rtype
@@ -1426,6 +1428,7 @@ func (v Value) CanInterface() bool {
 //	var i interface{} = (v's underlying value)
 // It panics if the Value was obtained by accessing
 // unexported struct fields.
+// 返回对象的值, 但以 interface{} 类型来呈现。
 func (v Value) Interface() (i any) {
 	return valueInterface(v, true)
 }
