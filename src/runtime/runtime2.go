@@ -199,12 +199,21 @@ type funcval struct {
 	// variable-size, fn-specific data here
 }
 
+// iface 表示带有一组方法的接口
 type iface struct {
+	// itab 结构体是接口类型的核心组成部分，
+	// 每一个 itab 都占32字节。
+
 	tab  *itab
 	data unsafe.Pointer
 }
 
+// eface 表示不带任何方法的空接口（interface{}）
+// 与 C 语言的 void * 不同，interface{} 类型不是任意类型。
+// 如果将类型转换成了 interface{} 类型，变量在运行期间的类型也会发生变化，
+// 获取变量类型时也会得到 interface{} 。
 type eface struct {
+	// _type 是 Go 语言的类型的运行时表示。
 	_type *_type
 	data  unsafe.Pointer
 }
@@ -341,6 +350,9 @@ type gobuf struct {
 //
 // sudogs are allocated from a special pool. Use acquireSudog and
 // releaseSudog to allocate and free them.
+//
+// 表示一个在等待队列中的 Goroutine，该结构存储了两个分别指向前后 runtime.sudo
+// 的指针以构成链表。
 type sudog struct {
 	// The following fields are protected by the hchan.lock of the
 	// channel this sudog is blocking on. shrinkstack depends on
@@ -891,6 +903,13 @@ type funcinl struct {
 // Needs to be in sync with
 // ../cmd/compile/internal/reflectdata/reflect.go:/^func.WriteTabs.
 type itab struct {
+	// inter 和 _type 用于表示类型
+	// hash 是对 _type.hash 的复制，当我们想将 interface 类型转换成具体类型时，
+	// 可以使用该字段开始判断目标类型和具体类型 runtime._type 是否一致 ?
+	// fun 是一个动态大小的数组，它是一个用于动态派发的虚函数表，存储了一组函数指针。
+	// 虽然该变量被声明成大小固定的数组，但在使用时会通过原始指针获取其中的数据，所以
+	// fun 数组中保存的元素数量是不确定的。
+
 	inter *interfacetype
 	_type *_type
 	hash  uint32 // copy of _type.hash. Used for type switches.

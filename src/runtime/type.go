@@ -28,7 +28,12 @@ const (
 // ../cmd/compile/internal/reflectdata/reflect.go:/^func.dcommontype and
 // ../reflect/type.go:/^type.rtype.
 // ../internal/reflectlite/type.go:/^type.rtype.
+// _type 是 Go 语言的类型的运行时表示。
 type _type struct {
+	// size -> 存储了类型占用的内存空间，为内存空间的分配提供信息。
+	// hash -> 帮助我们快速确定类型是否相等。
+	// equal -> 用于判断当前类型的多个对象是否相等，该字段是为了减少 Go 语言二进制包大小而从 typeAlg 结构体迁移过来的。
+
 	size       uintptr
 	ptrdata    uintptr // size of memory prefix holding all pointers
 	hash       uint32

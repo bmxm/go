@@ -791,6 +791,9 @@ func walkLogical(n *ir.LogicalExpr, init *ir.Nodes) ir.Node {
 }
 
 // walkSend walks an OSEND node.
+// 当我们想向 Channel 发送数据时，就需要使用 ch <- i 语句，
+// 编译器会将它解析成 OSEND 节点，并在 cmd/compile/internal/gc.walkexpr
+// 中转换成 runtime.chansend1
 func walkSend(n *ir.SendStmt, init *ir.Nodes) ir.Node {
 	n1 := n.Value
 	n1 = typecheck.AssignConv(n1, n.Chan.Type().Elem(), "chan send")

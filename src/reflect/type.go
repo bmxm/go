@@ -35,6 +35,10 @@ import (
 // Type values are comparable, such as with the == operator,
 // so they can be used as map keys.
 // Two Type values are equal if they represent identical types.
+//
+// Type 用于获取对象所属是类型信息，Value 用于获取与对象的值有关的信息。
+// 实现 Type 接口的类型为 rtype。rtype 仅在 reflect 包内部使用，
+// 外部代码只能通过 Type 接口来访问相关成员。
 type Type interface {
 	// Methods applicable to all types.
 
@@ -97,6 +101,7 @@ type Type interface {
 	String() string
 
 	// Kind returns the specific kind of this type.
+	// 获取 Type 所代表的类型。Kind 的值由一系列常量组成。
 	Kind() Kind
 
 	// Implements reports whether the type implements the interface type u.
@@ -188,6 +193,7 @@ type Type interface {
 	// In returns the type of a function type's i'th input parameter.
 	// It panics if the type's Kind is not Func.
 	// It panics if i is not in the range [0, NumIn()).
+	// 获取函数某个参数的类型信息。
 	In(i int) Type
 
 	// Key returns a map type's key type.
@@ -196,23 +202,28 @@ type Type interface {
 
 	// Len returns an array type's length.
 	// It panics if the type's Kind is not Array.
+	// 返回 Array 的长度，且只能是 Array。
 	Len() int
 
 	// NumField returns a struct type's field count.
 	// It panics if the type's Kind is not Struct.
+	// 返回结构体的字段数量。
 	NumField() int
 
 	// NumIn returns a function type's input parameter count.
 	// It panics if the type's Kind is not Func.
+	// 返回函数的参数个数。
 	NumIn() int
 
 	// NumOut returns a function type's output parameter count.
 	// It panics if the type's Kind is not Func.
+	// 返回函数返回值的个数。
 	NumOut() int
 
 	// Out returns the type of a function type's i'th output parameter.
 	// It panics if the type's Kind is not Func.
 	// It panics if i is not in the range [0, NumOut()).
+	// 获取函数某个返回值的类型信息。
 	Out(i int) Type
 
 	common() *rtype

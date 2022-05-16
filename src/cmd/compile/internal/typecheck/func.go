@@ -822,7 +822,11 @@ func tcMake(n *ir.CallExpr) ir.Node {
 		nn.SetEsc(n.Esc())
 
 	case types.TCHAN:
+		// Go 语言中所有的 Channel 的创建都会使用 make 关键字。
+		// 编译器会将 make(chan int, 10) 表达式转换成 OMAKE 类型的节点，
+		// 并在类型检查阶段将 OMAKE 类型的节点转换成 OMAKECHAN 类型。
 		l = nil
+		// 带缓冲区的异步 Channel
 		if i < len(args) {
 			l = args[i]
 			i++
@@ -836,9 +840,15 @@ func tcMake(n *ir.CallExpr) ir.Node {
 				n.SetType(nil)
 				return n
 			}
+			// 不带缓冲区的同步 Channel
 		} else {
+			// 如果不向 make 传递表示缓冲区大小的参数，那么就会设置一个默认值0，
+			// 表示当前 Channel 不存在缓冲区。
 			l = ir.NewInt(0)
 		}
+
+		// OMAKECHAN 类型的节点最终都会在 SSA 中间代码生成阶段之前
+		// 被转换成调用 runtime.makechan 或者 runtime.makechan64 的函数
 		nn = ir.NewMakeExpr(n.Pos(), ir.OMAKECHAN, l, nil)
 	}
 

@@ -259,6 +259,8 @@ func walkMakeChan(n *ir.MakeExpr, init *ir.Nodes) ir.Node {
 		argtype = types.Types[types.TINT]
 	}
 
+	// runtime.makechan64 于处理缓冲区大小大于232的情况 ?
+
 	return mkcall1(chanfn(fnname, 1, n.Type()), n.Type(), init, reflectdata.TypePtr(n.Type()), typecheck.Conv(size, argtype))
 }
 

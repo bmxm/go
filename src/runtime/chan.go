@@ -29,7 +29,27 @@ const (
 	debugChan = false
 )
 
+// Go 语言提供了一种不同的并发模型--通信顺序进程（communicating sequential processes, CSP）。
+// Goroutine 和 Channel 分别对应 CSP 中的实体和传递信息的媒介，Goroutine 之间会通过 Channel 传递数据。
+
+// 某种程度上说，Channel 是一个用于同步和通信的有锁队列。
+// 通过 buf 来保存 G 之间传输的数据
+// 通过 两个队列来保存发送和接收的 G
+// 通过 mutex 保护数据安全
 type hchan struct {
+	// qcount -> Channel 中元素的个数
+	// dataqsiz -> Channel 中环形队列的长度
+	// buf -> Channel 的缓冲区数据指针
+
+	// sendx -> Channel 的发送操作 处理到的位置
+	// recvx -> Channel 的接收操作 处理到的位置
+
+	// sendq 和 recvq 存储了当前 Channel 由于缓冲空间不足而阻塞的 Goroutine 列表。
+	// 这些等待队列使用双向链表 runtime.waitq 表示，链表中所有的元素都是 runtime.sudog 结构。
+
+	// elemsize -> Channel 能够收发的元素大小
+	// elemtype -> Channel 能够收发的元素类型
+
 	qcount   uint           // total data in the queue
 	dataqsiz uint           // size of the circular queue
 	buf      unsafe.Pointer // points to an array of dataqsiz elements
@@ -89,6 +109,11 @@ func makechan(t *chantype, size int) *hchan {
 	// SudoG's are referenced from their owning thread so they can't be collected.
 	// TODO(dvyukov,rlh): Rethink when collector can move allocated objects.
 	var c *hchan
+
+	// 如果当前 Channel 中不存在缓冲区，那么只会为 runtime.hchan 分配一块内存空间
+	// 如果当前 Channel 中存储的类型不是指针类型，会为当前 Channel 和底层数组分配一块连续的内存空间
+	// 其他情况会单独为 runtime.hchan 和缓冲区分配内存。
+
 	switch {
 	case mem == 0:
 		// Queue or element size is zero.
@@ -106,6 +131,7 @@ func makechan(t *chantype, size int) *hchan {
 		c.buf = mallocgc(mem, elem, true)
 	}
 
+	// 函数后面会统一更新 elemsize、elemtype 和 dataqsiz 几个字段
 	c.elemsize = uint16(elem.size)
 	c.elemtype = elem
 	c.dataqsiz = uint(size)
@@ -140,6 +166,7 @@ func full(c *hchan) bool {
 // entry point for c <- x from compiled code
 //go:nosplit
 func chansend1(c *hchan, elem unsafe.Pointer) {
+	// chansend1 只是调用了 runtime.chansend 并传入 Channel 和需要发送的数据。
 	chansend(c, elem, true, getcallerpc())
 }
 
@@ -156,6 +183,10 @@ func chansend1(c *hchan, elem unsafe.Pointer) {
  * the operation; we'll see that it's now closed.
  */
 func chansend(c *hchan, ep unsafe.Pointer, block bool, callerpc uintptr) bool {
+	// chansend 是向 Channel 中发送数据时一定会调用的函数
+	// 该函数包含了发送数据的全部逻辑
+	// 如果 block 参数设置成 true, 那么当前发送操作是阻塞的
+
 	if c == nil {
 		if !block {
 			return false

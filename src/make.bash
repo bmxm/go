@@ -222,3 +222,13 @@ rm -f ./cmd/dist/dist
 # 3 执行编译脚本
 # 之后便可以使用自己编译的SDK运行go代码, 如： ~/go/src/go/bin/go run main.go
 # 另外，也可以将 ~/go/src/go 配置成GoLand的SDK, 并且可以运行~/go/src/go项目本身
+
+# 查看 Type 类型成员列表
+# go doc reflect.Type
+# 查看带注释的 Type 类型成员列表
+# go doc -all reflect.Type
+
+# 查询出 net/http 所有的库函数
+# go doc net/http | grep "^func"
+# 查询出 net/http 所有的结构体
+# go doc net/http | grep "^type" | grep struct
