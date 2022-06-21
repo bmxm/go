@@ -24,10 +24,12 @@ type fmtFlags struct {
 	widPresent  bool
 	precPresent bool
 	minus       bool
-	plus        bool
-	sharp       bool
-	space       bool
-	zero        bool
+	// + 时，设为true
+	plus bool
+	// # 时，设为true
+	sharp bool
+	space bool
+	zero  bool
 
 	// For the formats %+v %#v, we set the plusV/sharpV flags
 	// and clear the plus/sharp flags since %+v and %#v are in effect

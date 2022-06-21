@@ -41,6 +41,7 @@ func ExampleFscanf() {
 	// 3
 }
 
+// 这个函数居然能直接运行？
 func ExampleFscanln() {
 	s := `dmr 1771 1.61803398875
 	ken 271828 3.14159`
