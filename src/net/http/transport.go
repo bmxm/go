@@ -93,6 +93,8 @@ const DefaultMaxIdleConnsPerHost = 2
 // request is treated as idempotent but the header is not sent on the
 // wire.
 type Transport struct {
+	// 之前有 idleConnCh,用来在多个后台 goroutine 之间相互发送 persistConn 实例，这样可以做到 persistConn 的复用
+
 	idleMu       sync.Mutex
 	closeIdle    bool                                // user has requested to close all idle conns
 	idleConn     map[connectMethodKey][]*persistConn // most recently used at end
@@ -535,6 +537,7 @@ func (t *Transport) roundTrip(req *Request) (*Response, error) {
 	cancelKey := cancelKey{origReq}
 	req = setupRewindBody(req)
 
+	// Transport 可以处理不同协议的请求，只需要通过 RegisterProtocol 来注册一些针对不同协议的 RoundTrip 实例。
 	if altRT := t.alternateRoundTripper(req); altRT != nil {
 		if resp, err := altRT.RoundTrip(req); err != ErrSkipAltProtocol {
 			return resp, err
@@ -578,6 +581,7 @@ func (t *Transport) roundTrip(req *Request) (*Response, error) {
 		// host (for http or https), the http proxy, or the http proxy
 		// pre-CONNECTed to https server. In any case, we'll be ready
 		// to send it requests.
+		// 获取 TCP 连接
 		pconn, err := t.getConn(treq, cm)
 		if err != nil {
 			t.setReqCanceler(cancelKey, nil)
@@ -585,6 +589,7 @@ func (t *Transport) roundTrip(req *Request) (*Response, error) {
 			return nil, err
 		}
 
+		// 调用 roundTrip() 方法把 Request 写入 TCP 中完成请求的发送。
 		var resp *Response
 		if pconn.alt != nil {
 			// HTTP/2 path.
@@ -1348,6 +1353,7 @@ func (t *Transport) getConn(treq *transportRequest, cm connectMethod) (pc *persi
 	}()
 
 	// Queue for idle connection.
+	// 如果能拿到空闲连接，则直接返回
 	if delivered := t.queueForIdleConn(w); delivered {
 		pc := w.pc
 		// Trace only for HTTP/1.
@@ -1850,6 +1856,8 @@ func (cm *connectMethod) tlsHost() string {
 // connectMethodKey is the map key version of connectMethod, with a
 // stringified proxy URL (or the empty string) instead of a pointer to
 // a URL.
+//
+// 记录了连接的协议、host等信息。
 type connectMethodKey struct {
 	proxy, scheme, addr string
 	onlyH1              bool
@@ -1866,22 +1874,37 @@ func (k connectMethodKey) String() string {
 
 // persistConn wraps a connection, usually a persistent one
 // (but may be used for non-keep-alive requests as well)
+//
+// persistConn 是普通网络连接（net.Conn）上的一层封装，一般表示的是
+// TCP 长连接（即在建立连接并传输数据完成之后，不用调用 close() 方法关闭连接，
+// 后续即可复用该 TCP 连接）
 type persistConn struct {
 	// alt optionally specifies the TLS NextProto RoundTripper.
 	// This is used for HTTP/2 today and future protocols later.
 	// If it's non-nil, the rest of the fields are unused.
 	alt RoundTripper
 
-	t         *Transport
-	cacheKey  connectMethodKey
-	conn      net.Conn
-	tlsState  *tls.ConnectionState
-	br        *bufio.Reader       // from conn
-	bw        *bufio.Writer       // to conn
-	nwrite    int64               // bytes written
-	reqch     chan requestAndChan // written by roundTrip; read by readLoop
-	writech   chan writeRequest   // written by roundTrip; read by writeLoop
-	closech   chan struct{}       // closed when conn closed
+	// 当前 persistConn 实例关联的 Transport 实例。
+	t        *Transport
+	cacheKey connectMethodKey
+
+	// 底层封装的连接
+	conn     net.Conn
+	tlsState *tls.ConnectionState
+
+	// 对底层连接的输入流的封装
+	br *bufio.Reader // from conn
+
+	// 对底层连接的输出流的封装
+	bw     *bufio.Writer // to conn
+	nwrite int64         // bytes written
+
+	// 主goroutine向reqch通道写入待读取的响应信息，readLoop从该通道里面接收这些信息并在读取响应之后将其返回。
+	reqch chan requestAndChan // written by roundTrip; read by readLoop
+
+	// 主goroutine会向writech通道中写入待发送的请求，writeLoop会从该通道中读取待发送的请求。
+	writech   chan writeRequest // written by roundTrip; read by writeLoop
+	closech   chan struct{}     // closed when conn closed
 	isProxy   bool
 	sawEOF    bool  // whether we've seen EOF from conn; owned by readLoop
 	readLimit int64 // bytes allowed to be read; owned by readLoop

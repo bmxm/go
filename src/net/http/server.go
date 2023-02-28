@@ -1862,6 +1862,7 @@ func (c *conn) serve(ctx context.Context) {
 	c.bufw = newBufioWriterSize(checkConnErrorWriter{c}, 4<<10)
 
 	for {
+		// 读取客户端的请求
 		w, err := c.readRequest(ctx)
 		if c.r.remain != c.server.initialReadLimitSize() {
 			// If we read any bytes off the wire, we're active.
@@ -1952,6 +1953,8 @@ func (c *conn) serve(ctx context.Context) {
 		}
 		c.setState(c.rwc, StateIdle, runHooks)
 		c.curReq.Store((*response)(nil))
+
+		// 处理完请求后，会根据 KeepAlives、idleTimeout 等配置决定是否断开连接
 
 		if !w.conn.server.doKeepAlives() {
 			// We're in shutdown mode. We might've replied
@@ -2239,6 +2242,8 @@ func RedirectHandler(url string, code int) Handler {
 // ServeMux also takes care of sanitizing the URL request path and the Host
 // header, stripping the port number and redirecting any request containing . or
 // .. elements or repeated slashes to an equivalent, cleaner URL.
+//
+// 多路复用器，通过 map[string]muxEntry 存储 URL 和 Handler 实例之间的映射关系
 type ServeMux struct {
 	mu    sync.RWMutex
 	m     map[string]muxEntry
@@ -2298,6 +2303,7 @@ func stripHostPort(h string) string {
 // Most-specific (longest) pattern wins.
 func (mux *ServeMux) match(path string) (h Handler, pattern string) {
 	// Check for exact match first.
+	// 精确匹配
 	v, ok := mux.m[path]
 	if ok {
 		return v.h, v.pattern
@@ -2305,6 +2311,7 @@ func (mux *ServeMux) match(path string) (h Handler, pattern string) {
 
 	// Check for longest valid match.  mux.es contains all patterns
 	// that end in / sorted from longest to shortest.
+	// 找不到则按匹配程度找
 	for _, e := range mux.es {
 		if strings.HasPrefix(path, e.pattern) {
 			return e.h, e.pattern
@@ -2410,9 +2417,11 @@ func (mux *ServeMux) handler(host, path string) (h Handler, pattern string) {
 	defer mux.mu.RUnlock()
 
 	// Host-specific pattern takes precedence over generic ones
+	// 首先根据 host 和 path 的组合查找
 	if mux.hosts {
 		h, pattern = mux.match(host + path)
 	}
+	// 找不到则只根据 path 查找
 	if h == nil {
 		h, pattern = mux.match(path)
 	}
@@ -2432,7 +2441,10 @@ func (mux *ServeMux) ServeHTTP(w ResponseWriter, r *Request) {
 		w.WriteHeader(StatusBadRequest)
 		return
 	}
+
+	// 根据请求路径选择对应的 Handler
 	h, _ := mux.Handler(r)
+	// 然后将请求交给 Handler 处理
 	h.ServeHTTP(w, r)
 }
 
@@ -3062,6 +3074,8 @@ func (srv *Server) Serve(l net.Listener) error {
 			}
 		}
 		tempDelay = 0
+
+		// 这里会把 Server 自身的指针放进去
 		c := srv.newConn(rw)
 		c.setState(c.rwc, StateNew, runHooks) // before Serve can return
 		go c.serve(connCtx)

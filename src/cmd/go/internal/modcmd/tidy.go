@@ -28,6 +28,7 @@ It adds any missing modules necessary to build the current module's
 packages and dependencies, and it removes unused modules that
 don't provide any relevant packages. It also adds any missing entries
 to go.sum and removes any unnecessary ones.
+添加缺失的、移除不相关的依赖及 go.sum。
 
 The -v flag causes tidy to print information about removed modules
 to standard error.

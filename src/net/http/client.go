@@ -141,6 +141,10 @@ type RoundTripper interface {
 	// must arrange to wait for the Close call before doing so.
 	//
 	// The Request's URL and Header fields must be initialized.
+	//
+	// 通过该方法来完成一个 HTTP 事务，即：
+	// 客户端发送一个 HTTP Request 到服务端，服务端处理完请求之后返回相应的
+	// HTTP Response 的过程。
 	RoundTrip(*Request) (*Response, error)
 }
 

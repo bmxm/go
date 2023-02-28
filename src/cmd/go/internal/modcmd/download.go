@@ -27,6 +27,9 @@ dependencies of the main module or module queries of the form path@version.
 With no arguments, download applies to all dependencies of the main module
 (equivalent to 'go mod download all').
 
+如果没有指定参数，则相当于执行 'go mod download all'，下载应用于module的全部依赖。
+（什么叫全部依赖？ 是go.mod中定义的，还是module中所以import的？）
+
 The go command will automatically download modules as needed during ordinary
 execution. The "go mod download" command is useful mainly for pre-filling
 the local cache or to compute the answers for a Go module proxy.
