@@ -199,6 +199,13 @@ func parseNetwork(ctx context.Context, network string, needsProto bool) (afnet s
 // resolveAddrList resolves addr using hint and returns a list of
 // addresses. The result contains at least one address when error is
 // nil.
+//
+// 访问 DNS 服务器，获取网站对应的 IP 地址
+//
+// 客户端首先查看是否有本地缓存，如果没有，则会用递归方式从权威域名服务器中获取 DNS 信息并缓存下来。
+// 如果你想深入了解 DNS 协议，可以参考《Introduction to Computer Networks and Cybersecurity》的第二章。
+// 在与远程服务器建连的过程中，当前的协程会进入阻塞等待的状态。
+// 正常情况下，当前请求的协程会等待连接完毕。但是因为建立连接的过程还是比较耗时的，所以如果在这个过程中正好有一个其他连接使用完了，协程就会优先使用该连接。
 func (r *Resolver) resolveAddrList(ctx context.Context, op, network, addr string, hint Addr) (addrList, error) {
 	afnet, _, err := parseNetwork(ctx, network, true)
 	if err != nil {

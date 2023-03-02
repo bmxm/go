@@ -502,7 +502,21 @@ func (t *Transport) alternateRoundTripper(req *Request) RoundTripper {
 	return altProto[req.URL.Scheme]
 }
 
+// HTTP 请求调用的核心函数是 roundTrip，它会首先传递请求给 writeLoop 协程，让 writeLoop 协程写入数据。
+// 接着，通知 readLoop 协程让它准备好读取数据。等 writeLoop 成功写入数据后，writeLoop 会通知 readLoop 断开后是否可以重用连接。
+// 然后 writeLoop 会通知上游写入是否成功。如果写入失败，上游会直接关闭连接。
+// 当 readLoop 接收到服务器发送的响应数据之后，会通知上游并且将 response 数据返回到上游，应用层会获取返回的 response 数据，并进行相应的业务处理 。
+// 应用层读取完毕 response 数据后，HTTP 标准库会自动调用 close 函数，该函数会通知 readLoop“数据读取完毕”。
+// 这样 readLoop 就可以进一步决策了。readLoop 需要判断是继续循环等待服务器消息，还是将当前连接放入到连接池中，或者是直接销毁。
+// Go HTTP 标准库使用了连接池等技术帮助我们更好地管理连接、高效读写消息、并托管了与操作系统之间的交互。
+
 // roundTrip implements a RoundTripper over HTTP.
+//
+// 当 http.Get 函数完成基本的请求封装后，会进入到核心的主入口函数 Transport.roundTrip，参数中会传递 request 请求数据。
+// Transport.roundTrip 函数会选择一个合适的连接来发送这个 request 请求，并返回 response。
+// 整个流程主要分为两步：
+//  1. 使用 getConn 函数来获得底层 TCP 连接；
+//  2. 调用 roundTrip 函数发送 request 并返回 response，此外还需要处理特殊协议，例如重定向、keep-alive 等。
 func (t *Transport) roundTrip(req *Request) (*Response, error) {
 	t.nextProtoOnce.Do(t.onceSetNextProtoDefaults)
 	ctx := req.Context()
@@ -1330,6 +1344,19 @@ func (t *Transport) customDialTLS(ctx context.Context, network, addr string) (co
 // specified in the connectMethod. This includes doing a proxy CONNECT
 // and/or setting up TLS.  If this doesn't return an error, the persistConn
 // is ready to write requests to.
+//
+// 并不是每一次 getConn 函数都需要经过 TCP 的 3 次握手才能建立新的连接。
+//
+// Go 标准库在这里使用了连接池来优化获取连接的过程。
+// 之前已经与服务器完成请求的连接一般不会立即被销毁（HTTP/1.1 默认使用了 keep-alive:true，可以复用连接），而是会调用 tryPutIdleConn 函数放入到连接池中。
+// 通请求结束后连接也可能会直接被销毁，例如请求头中指定了 keep-alive 属性为 false 或者连接已经超时。
+//
+// 使用连接池的收益是非常明显的，因为复用连接之后就不用再进行 TCP 三次握手了，这大大减少了请求的时间。
+// 举个特别的例子，在使用了 HTTPS 协议时，在三次握手基础上还增加了额外的鉴权协调，初始化的建连过程甚至需要花费几十到上百毫秒。
+// 另外连接池的设计也很有讲究，例如连接池中的连接到了一定的时间需要强制关闭。
+// 获取连接时的逻辑如下：
+//		当连接池中有对应的空闲连接时，直接使用该连接；
+//		当连接池中没有对应的空闲连接时，正常情况下会通过异步与服务端建连的方式获取连接，并将当前协程放入到等待队列中
 func (t *Transport) getConn(treq *transportRequest, cm connectMethod) (pc *persistConn, err error) {
 	req := treq.Request
 	trace := treq.trace
@@ -1353,7 +1380,7 @@ func (t *Transport) getConn(treq *transportRequest, cm connectMethod) (pc *persi
 	}()
 
 	// Queue for idle connection.
-	// 如果能拿到空闲连接，则直接返回
+	// 第一步，查看idle conn连接池中是否有空闲链接，如果有，则直接获取到并返回。如果没有，当前w会放入到 idleConnWait 等待队列中
 	if delivered := t.queueForIdleConn(w); delivered {
 		pc := w.pc
 		// Trace only for HTTP/1.
@@ -1372,9 +1399,12 @@ func (t *Transport) getConn(treq *transportRequest, cm connectMethod) (pc *persi
 	t.setReqCanceler(treq.cancelKey, func(err error) { cancelc <- err })
 
 	// Queue for permission to dial.
+	// 如果没有闲置的连接，则尝试与对端进行tcp连接
+	// 注意这里连接是异步的，这意味着当前请求是有可能提前从另一个刚闲置的连接中拿到请求的。这取决于哪一个更快。
 	t.queueForDial(w)
 
 	// Wait for completion or cancellation.
+	// 拿到 conn 后会 close(w.ready)
 	select {
 	case <-w.ready:
 		// Trace success but only for HTTP/1.
@@ -1563,6 +1593,8 @@ type erringRoundTripper interface {
 	RoundTripErr() error
 }
 
+// 为利用协程并发的优势，Transport.roundTrip 协程获取到连接后，
+// 会调用 Transport.dialConn 创建读写 buffer 以及读数据与写数据的两个协程，分别负责处理发送请求和服务器返回的消息
 func (t *Transport) dialConn(ctx context.Context, cm connectMethod) (pconn *persistConn, err error) {
 	pconn = &persistConn{
 		t:             t,
@@ -1750,6 +1782,8 @@ func (t *Transport) dialConn(ctx context.Context, cm connectMethod) (pconn *pers
 	pconn.br = bufio.NewReaderSize(pconn, t.readBufferSize())
 	pconn.bw = bufio.NewWriterSize(persistConnWriter{pconn}, t.writeBufferSize())
 
+	// 创建读写通道，writeLoop用于发送request，readLoop 用于接收响应。
+	// roundTrip 函数中会通过 chan 给 writeLoop 发送 pconn.br 给 readLoop 使用，pconn.bwm 给 writeLoop 使用
 	go pconn.readLoop()
 	go pconn.writeLoop()
 	return pconn, nil
